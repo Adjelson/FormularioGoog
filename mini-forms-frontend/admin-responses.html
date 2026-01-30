@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="pt">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mini Forms — Respostas</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="./assets/css/app.css" />
+</head>
+
+<body class="min-h-screen bg-gray-50 text-gray-900">
+  <header class="bg-white border-b">
+    <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
+      <a href="./admin-dashboard.html" class="font-semibold">← Dashboard</a>
+      <div class="flex items-center gap-2">
+        <a id="editForm" class="rounded-xl border px-3 py-2 text-sm hover:bg-gray-50">Editar Form</a>
+        <button id="logout" class="rounded-xl border px-3 py-2 text-sm hover:bg-gray-50">Sair</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 py-8">
+    <div>
+      <h1 class="text-2xl font-bold">Respostas</h1>
+      <p class="text-gray-600 mt-1">Seleciona uma submissão para ver detalhes.</p>
+    </div>
+
+    <div id="status" class="mt-4" hidden></div>
+
+    <section class="grid lg:grid-cols-3 gap-6 mt-6">
+      <div class="lg:col-span-1 rounded-2xl bg-white border shadow-sm p-5">
+        <div class="font-semibold">Submissões</div>
+        <div id="list" class="mt-3 space-y-2"></div>
+      </div>
+
+      <div class="lg:col-span-2 rounded-2xl bg-white border shadow-sm p-5">
+        <div class="flex items-center justify-between gap-3">
+          <div class="font-semibold">Detalhe</div>
+          <div class="text-xs text-gray-500">Uploads: clica para baixar</div>
+        </div>
+        <div id="detail" class="mt-4"></div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    import { api, fetchFileBlob } from "./assets/js/api.js";
+    import { clearToken, setStatus, qs, escapeHtml } from "./assets/js/config.js";
+    import { renderEmpty, pill } from "./assets/js/ui.js";
+
+    const formId = Number(qs("form_id") || 0);
+    const status = document.getElementById("status");
+    const listEl = document.getElementById("list");
+    const detailEl = document.getElementById("detail");
+
+    document.getElementById("editForm").href = "./admin-form-editor.html?id=" + encodeURIComponent(formId);
+
+    function requireAuth() {
+      const token = localStorage.getItem("auth_token");
+      if (!token) window.location.href = "./admin-login.html";
+    }
+
+    document.getElementById("logout").addEventListener("click", () => {
+      clearToken();
+      window.location.href = "./admin-login.html";
+    });
+
+    function rowItem(r) {
+      const when = r.submitted_at || "";
+      return `
+        <button data-rid="${r.id}" class="w-full text-left rounded-xl border px-3 py-2 hover:bg-gray-50">
+          <div class="flex items-center justify-between gap-2">
+            <div class="text-sm font-medium">#${r.id}</div>
+            ${pill(when, "gray")}
+          </div>
+          <div class="text-xs text-gray-500 mt-1">IP: ${escapeHtml(r.ip_address || "-")}</div>
+        </button>
+      `;
+    }
+
+    async function loadList() {
+      requireAuth();
+      try {
+        setStatus(status, "A carregar respostas...", "info");
+        const res = await api.listResponses(formId);
+        const list = res?.data || [];
+        if (!list.length) {
+          renderEmpty(listEl, "Sem respostas", "Quando alguém responder, vai aparecer aqui.");
+          renderEmpty(detailEl, "Nada selecionado", "Escolhe uma submissão à esquerda.");
+          setStatus(status, "", "info");
+          return;
+        }
+        listEl.innerHTML = list.map(rowItem).join("");
+        listEl.querySelectorAll("[data-rid]").forEach(btn => {
+          btn.addEventListener("click", () => showDetail(Number(btn.getAttribute("data-rid"))));
+        });
+        setStatus(status, "", "info");
+        showDetail(list[0].id);
+      } catch (e) {
+        setStatus(status, e?.payload?.error?.message || e.message, "err");
+        if (e.status === 401) window.location.href = "./admin-login.html";
+      }
+    }
+
+    function answerView(a) {
+      const type = a.type;
+      let value = a.answer_value ?? "";
+
+      if (type === "checkbox") {
+        try {
+          const arr = a.answer_parsed || JSON.parse(value || "[]");
+          value = Array.isArray(arr) ? arr.join(", ") : value;
+        } catch { }
+      }
+
+      if (type === "upload") {
+        const uploadId = a.upload_id || Number(value || 0);
+        return `
+      <div class="rounded-xl border p-4 bg-gray-50">
+        <div class="text-sm font-semibold">${escapeHtml(a.label || "Upload")}</div>
+        <button
+          type="button"
+          data-download-id="${uploadId}"
+          class="mt-2 inline-flex items-center rounded-xl bg-emerald-600 text-white px-3 py-1.5 text-sm hover:bg-emerald-700"
+        >
+          Baixar ficheiro (upload #${uploadId})
+        </button>
+      </div>
+    `;
+      }
+
+      return `
+    <div class="rounded-xl border p-4 bg-gray-50">
+      <div class="text-sm font-semibold">${escapeHtml(a.label || "Pergunta")}</div>
+      <div class="text-sm text-gray-700 mt-1 whitespace-pre-wrap">${escapeHtml(value)}</div>
+    </div>
+  `;
+    }
+
+
+    async function showDetail(rid) {
+      try {
+        setStatus(status, "A carregar detalhe...", "info");
+        const res = await api.getResponse(rid);
+        const data = res?.data;
+        const answers = data?.answers || [];
+        if (!answers.length) {
+          renderEmpty(detailEl, "Sem respostas", "Esta submissão não tem respostas.");
+        } else {
+          detailEl.innerHTML = answers.map(answerView).join("");
+
+          // ligar botões de download
+          detailEl.querySelectorAll("[data-download-id]").forEach(btn => {
+            btn.addEventListener("click", async () => {
+              const id = Number(btn.getAttribute("data-download-id"));
+              try {
+                setStatus(status, "A descarregar ficheiro...", "info");
+                const { blob, filename } = await fetchFileBlob(id);
+
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = filename || `upload-${id}`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+                setStatus(status, "Download concluído.", "ok");
+              } catch (e) {
+                const msg = e?.payload?.error?.message || e.message || "Erro ao descarregar ficheiro";
+                setStatus(status, msg, "err");
+              }
+            });
+          });
+        }
+        setStatus(status, "", "info");
+      } catch (e) {
+        setStatus(status, e?.payload?.error?.message || e.message, "err");
+      }
+    }
+
+
+    loadList();
+       (function () {
+          let tempoInativo = 0;
+         const LIMITE_SEGUNDOS = 900;
+          const URL_DESTINO = "./admin-login.html";
+
+          const monitorarInatividade = () => {
+            tempoInativo++;
+            console.log(`Inativo há ${tempoInativo}s`);
+
+            if (tempoInativo >= LIMITE_SEGUNDOS) {
+              window.location.href = URL_DESTINO;
+            }
+          };
+
+          const reiniciarContador = () => {
+            if (tempoInativo > 0) {
+              tempoInativo = 0;
+              console.log("Atividade detetada. Contador reiniciado.");
+            }
+          };
+
+          // Inicia o intervalo de 1 segundo
+          setInterval(monitorarInatividade, 1000);
+
+          // Regista os eventos de interação conforme documentado na [MDN Web Docs](https://developer.mozilla.org)
+          const eventos = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'];
+          eventos.forEach(evento => {
+            document.addEventListener(evento, reiniciarContador, { passive: true });
+          });
+        })();
+
+  </script>
+</body>
+
+</html>

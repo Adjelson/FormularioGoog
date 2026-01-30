@@ -1,0 +1,678 @@
+<!doctype html>
+<html lang="pt">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mini Forms — Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="./assets/css/app.css" />
+</head>
+
+<body class="min-h-screen bg-gray-50 text-gray-900">
+  <!-- Top bar -->
+  <header class="bg-white/80 backdrop-blur border-b sticky top-0 z-20">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+      <div class="flex items-center gap-2">
+        <div class="h-8 w-8 rounded-md bg-emerald-600 text-white flex items-center justify-center text-sm font-bold">
+          MF
+        </div>
+        <div>
+          <a href="./index.html" class="font-semibold tracking-tight">Mini Forms</a>
+          <div class="text-xs text-gray-500">Painel de administração</div>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <a href="./admin-dashboard.html"
+          class="hidden sm:inline text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-md px-3 py-1">
+          Dashboard
+        </a>
+
+        <a href="./admin-recycle.html"
+          class="inline-flex items-center gap-2 rounded-md border border-red-300 bg-red-50 px-3 py-1.5 text-xs sm:text-sm text-red-800 hover:bg-red-100">
+          <span class="h-2 w-2 rounded-full bg-red-500"></span>
+          Reciclagem
+        </a>
+
+        <button data-action="logout" class="rounded-md border px-3 py-1.5 text-xs sm:text-sm hover:bg-gray-50">
+          Sair
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 py-8 space-y-6">
+    <!-- Header + CTA -->
+    <section class="flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">Dashboard</h1>
+        <p class="text-gray-600 mt-1 text-sm sm:text-base">
+          Cria formulários, edita perguntas, publica e acompanha respostas em tempo real.
+        </p>
+      </div>
+
+      <button data-action="open-modal"
+        class="inline-flex items-center gap-2 rounded-md bg-emerald-600 text-white px-4 py-2 text-sm font-medium shadow-sm hover:bg-emerald-700 hover:shadow-md transition">
+        <span class="text-lg leading-none">+</span>
+        Novo Formulário
+      </button>
+    </section>
+
+    <div id="status" class="mt-2 text-sm" hidden></div>
+
+    <section class="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+      <div class="space-y-3">
+        <div class="flex items-center justify-between gap-2">
+          <div>
+            <h2 class="text-sm font-semibold text-gray-800 uppercase tracking-wide">
+              Formulários ativos
+            </h2>
+            <p class="text-xs text-gray-500">
+              Apenas formulários não arquivados.
+            </p>
+          </div>
+          <span id="formsCount"
+            class="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-700">
+            0 formulários
+          </span>
+        </div>
+
+        <div id="forms" class="grid gap-4"></div>
+      </div>
+
+      <aside class="space-y-4">
+        <div class="rounded-md bg-white border shadow-sm p-4 sm:p-5">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <div class="text-sm font-semibold text-gray-800">Atalhos rápidos</div>
+              <div class="text-xs text-gray-500">Algumas ações úteis para o dia a dia.</div>
+            </div>
+          </div>
+
+          <div class="mt-4 space-y-2">
+            <button data-action="open-modal"
+              class="w-full inline-flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-xs sm:text-sm hover:bg-gray-50">
+              <span class="flex items-center gap-2">
+                <span
+                  class="h-6 w-6 rounded-md bg-emerald-50 text-emerald-700 flex items-center justify-center text-sm">
+                  +
+                </span>
+                Criar novo formulário
+              </span>
+            </button>
+
+            <a href="./admin-recycle.html"
+              class="w-full inline-flex items-center justify-between gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs sm:text-sm text-red-800 hover:bg-red-100">
+              <span class="flex items-center gap-2">
+                <span class="h-6 w-6 rounded-md bg-red-100 text-red-500 flex items-center justify-center text-xs">
+                  🗑
+                </span>
+                Ver formulários na reciclagem
+              </span>
+            </a>
+          </div>
+        </div>
+
+        <div class="rounded-md bg-gradient-to-br from-emerald-600 to-emerald-500 text-white shadow-md p-4 sm:p-5">
+          <div class="text-sm font-semibold">Dica</div>
+          <p class="mt-2 text-xs sm:text-sm text-emerald-50 leading-relaxed">
+            Usa o estado de <span class="font-semibold">rascunho</span> para ir construindo
+            o formulário com calma e só publicar quando estiver tudo pronto.
+          </p>
+        </div>
+      </aside>
+    </section>
+
+    <!-- Modal Novo Formulário -->
+    <div id="modal" class="fixed inset-0 bg-black/40 hidden items-center justify-center p-4 z-30">
+      <div class="w-full max-w-lg rounded-md bg-white border shadow-2xl p-6 relative">
+        <button data-action="close-modal"
+          class="absolute right-4 top-4 rounded-md border h-8 w-8 flex items-center justify-center text-xs hover:bg-gray-50">
+          ✕
+        </button>
+
+        <div class="flex items-start gap-3 pr-6">
+          <div class="h-9 w-9 rounded-md bg-emerald-100 text-emerald-700 flex items-center justify-center text-lg">
+            +
+          </div>
+          <div>
+            <div class="text-lg font-semibold">Novo Formulário</div>
+            <div class="text-sm text-gray-600">
+              Dá um título ao teu formulário e personaliza o visual.
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-5 space-y-3">
+          <div>
+            <label class="text-sm font-medium">Título</label>
+            <input id="title"
+              class="mt-1 w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              placeholder="Ex: Inscrição no Curso" />
+          </div>
+          <div>
+            <label class="text-sm font-medium">Descrição</label>
+            <textarea id="description"
+              class="mt-1 w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              rows="3" placeholder="Texto opcional para explicar o objetivo do formulário"></textarea>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="text-sm font-medium">Cor primária</label>
+              <select id="primaryColor"
+                class="mt-1 w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
+                <option value="#10b981">Verde</option>
+                <option value="#3b82f6">Azul</option>
+                <option value="#8b5cf6">Roxo</option>
+                <option value="#ef4444">Vermelho</option>
+                <option value="#f59e0b">Amarelo</option>
+                <option value="#111827">Cinza (escuro)</option>
+              </select>
+              <p class="text-[11px] text-gray-400 mt-1">Escolhe uma cor primária</p>
+            </div>
+            <div>
+              <label class="text-sm font-medium">Cor de fundo</label>
+              <select id="bgColor"
+                class="mt-1 w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
+                <option value="#ffffff">Branco</option>
+                <option value="#f8fafc">Cinza claro</option>
+                <option value="#f1f5f9">Cinza suave</option>
+                <option value="#000000">Preto</option>
+                <option value="#fef3c7">Amarelo claro</option>
+              </select>
+              <p class="text-[11px] text-gray-400 mt-1">Escolhe uma cor de fundo</p>
+            </div>
+          </div>
+
+          <button data-action="create-form"
+            class="mt-2 w-full rounded-md bg-gray-900 text-white px-4 py-2.5 text-sm font-medium hover:bg-black transition">
+            Criar formulário
+          </button>
+
+          <div id="modalStatus" class="text-sm mt-2" hidden></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de confirmação de eliminação / reciclagem -->
+    <div id="confirmModal" class="fixed inset-0 bg-black/40 hidden items-center justify-center p-4 z-40">
+      <div class="w-full max-w-sm rounded-md bg-white border shadow-2xl p-5 relative">
+        <button data-action="close-confirm"
+          class="absolute right-4 top-4 rounded-md border h-8 w-8 flex items-center justify-center text-xs hover:bg-gray-50">
+          ✕
+        </button>
+
+        <div class="flex items-start gap-3 pr-4">
+          <div class="h-9 w-9 rounded-md bg-red-100 text-red-600 flex items-center justify-center text-lg">
+            🗑
+          </div>
+          <div>
+            <div class="text-base sm:text-lg font-semibold" id="confirmTitle">
+              Enviar formulário para a reciclagem?
+            </div>
+            <p class="mt-1 text-sm text-gray-600" id="confirmDesc">
+              O formulário deixará de aparecer na lista de ativos, mas ficará disponível na
+              <span class="font-medium">Reciclagem</span>, onde podes consultar perguntas e respostas.
+            </p>
+          </div>
+        </div>
+
+        <div class="mt-4 flex items-center justify-end gap-2">
+          <button data-action="cancel-archive"
+            class="rounded-md border px-3 py-1.5 text-xs sm:text-sm hover:bg-gray-50">
+            Cancelar
+          </button>
+          <button data-action="confirm-archive"
+            class="rounded-md bg-red-600 text-white px-3 py-1.5 text-xs sm:text-sm hover:bg-red-500">
+            Sim, enviar para a reciclagem
+          </button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script type="module">
+    import { api } from "./assets/js/api.js";
+    import { clearToken, setStatus, escapeHtml } from "./assets/js/config.js";
+    import { renderEmpty, pill } from "./assets/js/ui.js";
+
+    const $ = (sel, ctx = document) => ctx.querySelector(sel);
+    const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
+
+    const statusEl = $("#status");
+    const formsEl = $("#forms");
+    const formsCount = $("#formsCount");
+    const modal = $("#modal");
+    const modalStatus = $("#modalStatus");
+    const modalTitleEl = modal.querySelector(".text-lg.font-semibold");
+    const modalCreateBtn = modal.querySelector('[data-action="create-form"]');
+
+    const primarySelect = $("#primaryColor");
+    const bgSelect = $("#bgColor");
+
+    const confirmModal = $("#confirmModal");
+    const confirmTitleEl = $("#confirmTitle");
+    const confirmDescEl = $("#confirmDesc");
+
+    let editingId = null;
+    let archivePendingId = null;
+
+    function requireAuth() {
+      if (!localStorage.getItem("auth_token")) location.href = "./admin-login.html";
+    }
+
+    function showModal() {
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+    }
+
+    function resetModalUi() {
+      setStatus(modalStatus, "", "info");
+      $("#title").value = "";
+      $("#description").value = "";
+      $("#primaryColor").value = "#10b981";
+      $("#bgColor").value = "#ffffff";
+      editingId = null;
+      modalTitleEl.textContent = "Novo Formulário";
+      modalCreateBtn.textContent = "Criar formulário";
+      updateModalSwatches();
+    }
+
+    function hideModal() {
+      modal.classList.add("hidden");
+      modal.classList.remove("flex");
+      resetModalUi();
+    }
+
+    function showConfirmModal(formId) {
+      archivePendingId = formId;
+      confirmModal.classList.remove("hidden");
+      confirmModal.classList.add("flex");
+    }
+
+    function hideConfirmModal() {
+      confirmModal.classList.add("hidden");
+      confirmModal.classList.remove("flex");
+      archivePendingId = null;
+    }
+
+    // create small color swatches next to selects and update them
+    function ensureSwatch(selectEl, key) {
+      if (!selectEl) return null;
+      let sw = selectEl.parentElement.querySelector(`[data-swatch="${key}"]`);
+      if (!sw) {
+        sw = document.createElement("span");
+        sw.setAttribute("data-swatch", key);
+        sw.className = "inline-block h-5 w-8 ml-2 rounded border";
+        selectEl.parentElement.appendChild(sw);
+      }
+      return sw;
+    }
+
+    function updateSwatchElement(swatchEl, color) {
+      if (!swatchEl) return;
+      swatchEl.style.background = color || "transparent";
+      swatchEl.title = color || "";
+      // subtle border for light colors
+      if (!color) swatchEl.style.borderColor = "transparent";
+      else {
+        const c = (color || "").replace("#", "");
+        const r = parseInt(c.substring(0, 2), 16) || 0;
+        const g = parseInt(c.substring(2, 4), 16) || 0;
+        const b = parseInt(c.substring(4, 6), 16) || 0;
+        const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        swatchEl.style.borderColor =
+          lum > 220 ? "rgba(0,0,0,0.12)" : "rgba(0,0,0,0.06)";
+      }
+    }
+
+    async function createOrUpdateFormHandler() {
+      try {
+        setStatus(
+          modalStatus,
+          editingId ? "A atualizar formulário..." : "A criar formulário...",
+          "info",
+        );
+        const title = $("#title").value.trim();
+        const description = $("#description").value.trim();
+        const primaryColor = $("#primaryColor").value.trim();
+        const background = $("#bgColor").value.trim();
+
+        if (!title) return setStatus(modalStatus, "Título é obrigatório.", "warn");
+
+        const payload = {
+          title,
+          description,
+          theme: { primaryColor, background, radius: 8, font: "Inter" },
+        };
+
+        if (editingId) {
+          await api.updateForm(editingId, payload);
+          hideModal();
+          setStatus(statusEl, "Formulário atualizado com sucesso!", "ok");
+          await load();
+        } else {
+          const res = await api.createForm(payload);
+          const id = res?.id;
+          hideModal();
+          setStatus(statusEl, "Formulário criado com sucesso!", "ok");
+
+          if (id) {
+            location.href = `./admin-form-editor.html?id=${encodeURIComponent(id)}`;
+          } else {
+            await load();
+          }
+        }
+      } catch (e) {
+        const msg = e?.payload?.error?.message || e.message || "Erro ao guardar formulário";
+        setStatus(modalStatus, msg, "err");
+      }
+    }
+
+    function updateModalSwatches() {
+      const ps = ensureSwatch(primarySelect, "primary");
+      const bs = ensureSwatch(bgSelect, "bg");
+      updateSwatchElement(ps, primarySelect?.value);
+      updateSwatchElement(bs, bgSelect?.value);
+    }
+
+    if (primarySelect) primarySelect.addEventListener("change", () => updateModalSwatches());
+    if (bgSelect) bgSelect.addEventListener("change", () => updateModalSwatches());
+
+    function formCard(f) {
+      const isPub = !!Number(f.is_published);
+      const badge = isPub ? pill("Publicado", "green") : pill("Rascunho", "red");
+      const publicUrl = f.slug
+        ? `${location.origin}/api/public/forms/${encodeURIComponent(f.slug)}`
+        : null;
+
+      // theme pode vir como f.theme (objeto) ou f.theme_settings (JSON)
+      let theme = {};
+      if (f.theme && typeof f.theme === "object") {
+        theme = f.theme;
+      } else if (f.theme_settings) {
+        try {
+          theme =
+            typeof f.theme_settings === "string"
+              ? JSON.parse(f.theme_settings)
+              : f.theme_settings;
+        } catch {
+          theme = {};
+        }
+      }
+
+      const pColor = escapeHtml(theme.primaryColor || theme.primary_color || "#10b981");
+      const bgColor =
+        escapeHtml(theme.background || theme.bg || theme.backgroundColor || "#ffffff");
+
+      return `
+        <div class="rounded-md bg-white border shadow-sm p-5 hover:shadow-md transition">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <div class="flex items-center gap-2">
+                <div class="font-semibold truncate">${escapeHtml(f.title || "Sem título")}</div>
+                ${badge}
+              </div>
+              <div class="text-sm text-gray-600 mt-1 line-clamp-2">
+                ${escapeHtml(f.description || "")}
+              </div>
+
+              <div class="mt-2 flex items-center gap-3 text-xs text-gray-500">
+                <div class="inline-flex items-center gap-2">
+                  <span class="h-4 w-4 rounded" style="background:${pColor}; border:1px solid rgba(0,0,0,0.06)"></span>
+                  <span>Cor primária</span>
+                </div>
+                <div class="inline-flex items-center gap-2">
+                  <span class="h-4 w-4 rounded" style="background:${bgColor}; border:1px solid rgba(0,0,0,0.06)"></span>
+                  <span>Fundo</span>
+                </div>
+              </div>
+
+              <div class="mt-2 space-y-1 text-xs text-gray-500">
+                ${publicUrl
+          ? `
+                  <div class="flex items-center gap-1">
+                    <span class="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-700">Link público</span>
+                    <button type="button" data-copy-url="${publicUrl}" class="text-[11px] text-emerald-700 hover:underline">Copiar</button>
+                  </div>`
+          : ``
+        }
+              </div>
+            </div>
+
+            <div class="flex flex-col gap-2 shrink-0">
+              <button
+                data-archive="${f.id}"
+                class="rounded-md border px-3 py-1.5 text-xs bg-red-600 sm:text-sm text-white hover:bg-red-400 transition">
+                Eliminar
+              </button>
+              <button
+                data-edit-id="${f.id}"
+                class="rounded-md border px-3 py-1.5 text-xs sm:text-sm hover:bg-gray-50 text-center">
+                Editar visual
+              </button>
+              <a
+                class="rounded-md bg-gray-900 text-white px-3 py-1.5 text-xs sm:text-sm hover:bg-black text-center"
+                href="./admin-responses.html?form_id=${encodeURIComponent(f.id)}">
+                Respostas
+              </a>
+              <a
+                class="rounded-md border px-3 py-1.5 bg-emerald-600 text-white sm:text-sm hover:bg-emerald-700 text-center"
+                href="./admin-form-editor.html?id=${encodeURIComponent(f.id)}">
+                Perguntas
+              </a>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    async function load() {
+      requireAuth();
+      try {
+        setStatus(statusEl, "A carregar formulários...", "info");
+        const res = await api.listForms();
+        const list = Array.isArray(res) ? res : (res?.data || []);
+
+        if (!list.length) {
+          formsCount.textContent = "0 formulários";
+          renderEmpty(
+            formsEl,
+            "Ainda não tens formulários",
+            "Clica em “Novo Formulário” para começar.",
+          );
+          setStatus(statusEl, "", "info");
+          return;
+        }
+
+        formsCount.textContent =
+          list.length === 1 ? "1 formulário" : `${list.length} formulários`;
+        formsEl.innerHTML = list.map(formCard).join("");
+
+        setStatus(statusEl, "", "info");
+      } catch (e) {
+        const msg = e?.payload?.error?.message || e.message || "Erro ao carregar formulários";
+        setStatus(statusEl, msg, "err");
+        if (e.status === 401) location.href = "./admin-login.html";
+      }
+    }
+
+    // Delegated event handling
+    document.addEventListener("click", async (ev) => {
+      const t = ev.target;
+
+      if (t.closest('[data-action="open-modal"]')) {
+        ev.preventDefault();
+        resetModalUi();
+        showModal();
+        return;
+      }
+
+      if (t.closest('[data-action="close-modal"]')) {
+        ev.preventDefault();
+        hideModal();
+        return;
+      }
+
+      if (t.closest('[data-action="logout"]')) {
+        ev.preventDefault();
+        clearToken();
+        location.href = "./admin-login.html";
+        return;
+      }
+
+      if (t.closest('[data-action="create-form"]')) {
+        ev.preventDefault();
+        await createOrUpdateFormHandler();
+        return;
+      }
+
+      // abrir modal de confirmação de reciclagem
+      const archiveBtn = t.closest("[data-archive]");
+      if (archiveBtn) {
+        ev.preventDefault();
+        const id = archiveBtn.getAttribute("data-archive");
+        if (!id) return;
+        showConfirmModal(id);
+        return;
+      }
+
+      // confirmar envio para reciclagem
+      if (t.closest('[data-action="confirm-archive"]')) {
+        ev.preventDefault();
+        if (!archivePendingId) {
+          hideConfirmModal();
+          return;
+        }
+        try {
+          setStatus(statusEl, "A enviar formulário para a reciclagem...", "info");
+          await api.archiveForm(archivePendingId);
+          setStatus(statusEl, "Formulário enviado para a reciclagem.", "ok");
+          hideConfirmModal();
+          await load();
+        } catch (e) {
+          const msg = e?.payload?.error?.message || e.message || "Erro";
+          setStatus(statusEl, msg, "err");
+        }
+        return;
+      }
+
+      // cancelar/fechar modal de confirmação
+      if (t.closest('[data-action="close-confirm"]') || t.closest('[data-action="cancel-archive"]')) {
+        ev.preventDefault();
+        hideConfirmModal();
+        return;
+      }
+
+      const copyBtn = t.closest("[data-copy-url]");
+      if (copyBtn) {
+        ev.preventDefault();
+        const url = copyBtn.getAttribute("data-copy-url");
+        try {
+          await navigator.clipboard.writeText(url);
+          setStatus(statusEl, "Link público copiado para a área de transferência.", "ok");
+        } catch {
+          setStatus(statusEl, "Não foi possível copiar o link.", "err");
+        }
+        return;
+      }
+
+      const editBtn = t.closest("[data-edit-id]");
+      if (editBtn) {
+        ev.preventDefault();
+        const id = editBtn.getAttribute("data-edit-id");
+        try {
+          setStatus(statusEl, "A carregar formulário...", "info");
+          const f = await api.getForm(id);
+          // populate modal with form data
+          $("#title").value = f.title || "";
+          $("#description").value = f.description || "";
+
+          // theme may come as f.theme (object) or f.theme_settings (JSON string) depending on API
+          let theme = {};
+          if (f.theme && typeof f.theme === "object") {
+            theme = f.theme;
+          } else if (f.theme_settings) {
+            try {
+              theme =
+                typeof f.theme_settings === "string"
+                  ? JSON.parse(f.theme_settings)
+                  : f.theme_settings;
+            } catch {
+              theme = {};
+            }
+          }
+
+          // fallback keys support
+          $("#primaryColor").value =
+            theme.primaryColor || theme.primary_color || "#10b981";
+          $("#bgColor").value =
+            theme.background || theme.bg || theme.backgroundColor || "#ffffff";
+
+          editingId = f.id || id;
+          modalTitleEl.textContent = "Editar Formulário";
+          modalCreateBtn.textContent = "Guardar alterações";
+          setStatus(statusEl, "", "info");
+          updateModalSwatches();
+          showModal();
+        } catch (e) {
+          const msg = e?.payload?.error?.message || e.message || "Erro ao carregar formulário";
+          setStatus(statusEl, msg, "err");
+          if (e.status === 401) location.href = "./admin-login.html";
+        }
+        return;
+      }
+    });
+
+    // close new-form modal by clicking backdrop
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) hideModal();
+    });
+
+    // close confirm modal by clicking backdrop
+    confirmModal.addEventListener("click", (e) => {
+      if (e.target === confirmModal) hideConfirmModal();
+    });
+
+    // initialize swatches on script load
+    updateModalSwatches();
+    load();
+
+    (function () {
+        let tempoInativo = 0;
+        const LIMITE_SEGUNDOS = 900;
+        const URL_DESTINO = "./admin-login.html";
+
+        const monitorarInatividade = () => {
+          tempoInativo++;
+          console.log(`Inativo há ${tempoInativo}s`);
+
+          if (tempoInativo >= LIMITE_SEGUNDOS) {
+            window.location.href = URL_DESTINO;
+            clearToken();
+          }
+        };
+
+        const reiniciarContador = () => {
+          if (tempoInativo > 0) {
+            tempoInativo = 0;
+            console.log("Atividade detetada. Contador reiniciado.");
+          }
+        };
+
+        // Inicia o intervalo de 1 segundo
+        setInterval(monitorarInatividade, 1000);
+
+        // Regista os eventos de interação conforme documentado na [MDN Web Docs](https://developer.mozilla.org)
+        const eventos = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'];
+        eventos.forEach(evento => {
+          document.addEventListener(evento, reiniciarContador, { passive: true });
+        });
+      })();
+
+  </script>
+</body>
+
+</html>

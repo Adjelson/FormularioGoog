@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="pt">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mini Forms — Form Público</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="./assets/css/app.css" />
+  <meta name="referrer" content="no-referrer" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <!-- CSP minimal: permite CDN do Tailwind e os módulos locais -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https:; script-src 'self' https://cdn.tailwindcss.com 'unsafe-inline'; style-src 'self' https://cdn.tailwindcss.com 'unsafe-inline'; connect-src 'self' https:;">
+</head>
+
+<body class="min-h-screen bg-gray-50 text-gray-900">
+  <main class="max-w-3xl mx-auto px-4 py-10">
+    <div id="status" class="mt-4" role="status" aria-live="polite" hidden></div>
+
+    <div id="card" class="rounded-md bg-white border shadow p-6 mt-4">
+      <div id="head" class="mb-4">
+        <h1 id="title" class="text-2xl font-semibold" style="text-align: center;align-items: center;">O questionario foi finalizado ou desativado.</h1>
+        <p id="desc" class="text-gray-600 mt-1"></p>
+      </div>
+
+      <form id="form" class="mt-2 space-y-5" novalidate></form>
+
+      <div class="mt-6 grid gap-3">
+        <button id="submitBtn"
+          class="w-full rounded-md bg-emerald-600 text-white px-4 py-2 font-medium hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          type="button">
+          Enviar
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <script type="module">
+    import { api } from "./assets/js/api.js";
+    import { setStatus, qs, escapeHtml, humanBytes } from "./assets/js/config.js";
+
+    const status = document.getElementById("status");
+    const titleEl = document.getElementById("title");
+    const descEl = document.getElementById("desc");
+    const formEl = document.getElementById("form");
+    const card = document.getElementById("card");
+    const submitBtn = document.getElementById("submitBtn");
+
+    const slug = (qs("slug") || "").trim();
+    if (!slug) {
+      setStatus(status, "Falta o slug. Abre assim: public-form.html?slug=SEU_SLUG", "err");
+    }
+
+    let formData = null;
+    const uploadMap = new Map(); // question_id -> upload_id
+
+    function applyTheme(theme) {
+      const bg = theme?.background || "#ffffff";
+      card.style.backgroundColor = bg;
+    }
+
+    // sanitize input: remove tags and control chars, truncate to maxLen
+    function sanitizeString(v = "", maxLen = 1000) {
+      if (typeof v !== "string") return "";
+      // remove tags
+      let s = v.replace(/<[^>]*>/g, "");
+      // remove control characters except newline and tab
+      s = s.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]+/g, "");
+      return s.trim().slice(0, maxLen);
+    }
+
+    function fieldWrap(inner, required = false) {
+      return `
+        <div class="space-y-2">
+          ${inner}
+          ${required ? `<div class="text-xs text-red-600" data-required-note>* Obrigatório</div>` : ""}
+        </div>
+      `;
+    }
+
+    function fieldErrorEl(qid) {
+      return `<div data-err="${qid}" class="text-xs text-red-600 mt-1" aria-live="assertive"></div>`;
+    }
+
+    function renderQuestion(q) {
+      const req = !!q.is_required;
+      const qid = q.id;
+      const label = escapeHtml(q.label || "");
+      const placeholder = escapeHtml(q.placeholder || "");
+
+      // use conservative max lengths
+      const maxText = 255;
+      const maxLong = 2000;
+
+      if (q.type === "text") {
+        return fieldWrap(`
+          <label class="text-sm font-medium">${label}</label>
+          <input
+            data-qid="${qid}"
+            data-type="text"
+            class="w-full rounded-md border px-3 py-2 focus:ring-1 focus:ring-emerald-400"
+            placeholder="${placeholder}"
+            maxlength="${maxText}"
+            ${req ? "required" : ""}
+            inputmode="text"
+            autocapitalize="sentences"
+            />
+          ${fieldErrorEl(qid)}
+        `, req);
+      }
+
+      if (q.type === "long_text") {
+        return fieldWrap(`
+          <label class="text-sm font-medium">${label}</label>
+          <textarea
+            data-qid="${qid}"
+            data-type="long_text"
+            class="w-full rounded-md border px-3 py-2 focus:ring-1 focus:ring-emerald-400"
+            rows="5"
+            placeholder="${placeholder}"
+            maxlength="${maxLong}"
+            ${req ? "required" : ""}
+          ></textarea>
+          ${fieldErrorEl(qid)}
+        `, req);
+      }
+
+      if (q.type === "checkbox") {
+        const opts = q.options || [];
+        const items = opts.map(o => `
+          <label class="flex items-center gap-2 rounded-md border px-3 py-2 hover:bg-gray-50 cursor-pointer">
+            <input type="checkbox" data-qid="${qid}" data-type="checkbox" value="${o.id}" class="h-4 w-4" />
+            <span class="text-sm">${escapeHtml(o.option_label)}</span>
+          </label>
+        `).join("");
+        return fieldWrap(`
+          <div class="text-sm font-medium">${label}</div>
+          <div class="space-y-2">${items || `<div class="text-sm text-gray-600">Sem opções</div>`}</div>
+          ${fieldErrorEl(qid)}
+        `, req);
+      }
+
+      if (q.type === "upload") {
+        // conservative limits
+        const maxSize = 5 * 1024 * 1024; // 5MB
+        // if the API provided accepted types, respect them; otherwise allow common types
+        const accept = (q.accept_types && q.accept_types.join(",")) || "image/*,application/pdf";
+        return fieldWrap(`
+          <label class="text-sm font-medium">${label}</label>
+          <input
+            type="file"
+            data-qid="${qid}"
+            data-type="upload"
+            class="w-full rounded-md border px-3 py-2 bg-white"
+            accept="${accept}"
+            aria-describedby="upinfo-${qid}"
+          />
+          <div id="upinfo-${qid}" data-upinfo="${qid}" class="text-xs text-gray-600 mt-1"></div>
+          ${fieldErrorEl(qid)}
+        `, req);
+      }
+
+      if (q.type === "radio") {
+        const opts = q.options || [];
+        const items = opts.map(o => `
+    <label class="flex items-center gap-2 rounded-md border px-3 py-2 hover:bg-gray-50 cursor-pointer">
+      <input
+        type="radio"
+        name="q_${qid}"
+        data-qid="${qid}"
+        data-type="radio"
+        value="${o.id}"
+        class="h-4 w-4"
+      />
+      <span class="text-sm">${escapeHtml(o.option_label)}</span>
+    </label>
+  `).join("");
+
+        return fieldWrap(`
+    <div class="text-sm font-medium">${label}</div>
+    <div class="space-y-2">${items || `<div class="text-sm text-gray-600">Sem opções</div>`}</div>
+    ${fieldErrorEl(qid)}
+  `, req);
+      }
+
+      // unknown types ignored for safety
+      return "";
+    }
+
+    async function load() {
+      try {
+        setStatus(status, "A carregar formulário...", "info");
+        const res = await api.getPublicForm(slug);
+        formData = res?.data;
+        if (!formData) throw new Error("Form inválido.");
+
+        titleEl.textContent = formData.title || "Formulário";
+        descEl.textContent = formData.description || "";
+        applyTheme(formData.theme_settings);
+
+        const qsArr = formData.questions || [];
+        formEl.innerHTML = qsArr.map(renderQuestion).join("");
+
+        // setup upload handlers
+        formEl.querySelectorAll('input[data-type="upload"]').forEach(inp => {
+          const qid = Number(inp.getAttribute("data-qid"));
+          const info = document.querySelector(`[data-upinfo="${qid}"]`);
+          inp.addEventListener("change", async () => {
+            const file = inp.files && inp.files[0];
+            if (!file) {
+              info.textContent = "";
+              uploadMap.delete(qid);
+              return;
+            }
+            // file size check (5MB)
+            const MAX = 5 * 1024 * 1024;
+            if (file.size > MAX) {
+              info.textContent = "Ficheiro demasiado grande. Máx 5MB.";
+              uploadMap.delete(qid);
+              return;
+            }
+            // basic mime type check if accept provided
+            const accept = inp.getAttribute("accept");
+            if (accept && accept !== "") {
+              // allow wildcard like image/*
+              const accepted = accept.split(",").map(s => s.trim());
+              const ok = accepted.some(a => {
+                if (a.endsWith("/*")) {
+                  return file.type.startsWith(a.replace("/*", ""));
+                }
+                return file.type === a || file.name.toLowerCase().endsWith(a.replace(".", ""));
+              });
+              if (!ok) {
+                info.textContent = "Tipo de ficheiro não aceite.";
+                uploadMap.delete(qid);
+                return;
+              }
+            }
+
+            info.textContent = "A enviar: " + escapeHtml(file.name) + " (" + humanBytes(file.size) + ") ...";
+            try {
+              submitBtn.disabled = true;
+              const r = await api.uploadFile(file);
+              const upload_id = r?.data?.upload_id;
+              if (!upload_id) throw new Error("Upload sem upload_id.");
+              uploadMap.set(qid, upload_id);
+              info.textContent = "Upload OK";
+            } catch (e) {
+              info.textContent = "Erro upload: " + (e?.payload?.error?.message || e.message);
+              uploadMap.delete(qid);
+            } finally {
+              submitBtn.disabled = false;
+            }
+          });
+        });
+
+        setStatus(status, "", "info");
+      } catch (e) {
+        setStatus(status, e?.payload?.error?.message || e.message, "err");
+      }
+    }
+
+    function clearFieldErrors() {
+      formEl.querySelectorAll("[data-err]").forEach(el => el.textContent = "");
+    }
+
+    function showFieldError(qid, msg) {
+      const el = formEl.querySelector(`[data-err="${qid}"]`);
+      if (el) el.textContent = msg;
+    }
+
+    function focusFirstError() {
+      const errEl = formEl.querySelector("[data-err]:not(:empty)");
+      if (!errEl) return;
+      // find associated input
+      const qid = errEl.getAttribute("data-err");
+      const input = formEl.querySelector(`[data-qid="${qid}"]`);
+      if (input) input.focus({ preventScroll: false });
+      errEl.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+
+    function validateAndBuildPayload() {
+      const errors = [];
+      const answers = {};
+      clearFieldErrors();
+
+      for (const q of (formData?.questions || [])) {
+        const qid = Number(q.id);
+        const req = !!q.is_required;
+
+        if (q.type === "text" || q.type === "long_text") {
+          const el = formEl.querySelector(`[data-qid="${qid}"][data-type="${q.type}"]`);
+          const raw = (el?.value || "");
+          const maxLen = q.type === "text" ? 255 : 2000;
+          const v = sanitizeString(raw, maxLen);
+
+          if (req && !v) {
+            errors.push({ question_id: qid, message: "Obrigatório" });
+            showFieldError(qid, "Obrigatório");
+          } else if (v.length > maxLen) {
+            errors.push({ question_id: qid, message: "Texto demasiado longo" });
+            showFieldError(qid, "Texto demasiado longo");
+          } else if (v) {
+            answers[qid] = v;
+          }
+        }
+
+        if (q.type === "checkbox") {
+          const checked = Array.from(formEl.querySelectorAll(`input[data-qid="${qid}"][data-type="checkbox"]:checked`))
+            .map(x => Number(x.value));
+          if (req && checked.length === 0) {
+            errors.push({ question_id: qid, message: "Selecione pelo menos 1" });
+            showFieldError(qid, "Selecione pelo menos 1");
+          }
+          if (checked.length) answers[qid] = checked;
+        }
+
+        if (q.type === "radio") {
+          const checked = formEl.querySelector(
+            `input[data-qid="${qid}"][data-type="radio"]:checked`
+          );
+          const val = checked ? Number(checked.value) : null;
+
+          if (req && !val) {
+            errors.push({ question_id: qid, message: "Selecione uma opção" });
+            showFieldError(qid, "Selecione uma opção");
+          }
+          if (val) answers[qid] = val;
+        }
+
+        if (q.type === "upload") {
+          const upId = uploadMap.get(qid);
+          if (req && !upId) {
+            errors.push({ question_id: qid, message: "Upload obrigatório" });
+            showFieldError(qid, "Upload obrigatório");
+          }
+          if (upId) answers[qid] = { upload_id: upId };
+        }
+      }
+
+      return { errors, payload: { answers } };
+    }
+
+    submitBtn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      if (!formData) return;
+
+      submitBtn.disabled = true;
+      try {
+        const { errors, payload } = validateAndBuildPayload();
+        if (errors.length) {
+          setStatus(status, "Há campos obrigatórios por preencher.", "warn");
+          focusFirstError();
+          submitBtn.disabled = false;
+          return;
+        }
+
+        setStatus(status, "A enviar resposta...", "info");
+        await api.submitPublicResponse(slug, payload);
+        setStatus(status, "Resposta enviada com sucesso!", "ok");
+
+        // reset inputs safely
+        formEl.querySelectorAll("input, textarea").forEach(x => {
+          if (x.type === "checkbox") x.checked = false;
+          else if (x.type === "file") x.value = "";
+          else x.value = "";
+        });
+        uploadMap.clear();
+        formEl.querySelectorAll("[data-upinfo]").forEach(x => x.textContent = "");
+        clearFieldErrors();
+      } catch (e2) {
+        const msg = e2?.payload?.error?.message || e2.message || "Erro";
+        setStatus(status, msg, "err");
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+
+    // basic keyboard submit via Enter on single-line inputs
+    formEl.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" && ev.target?.tagName === "INPUT" && ev.target.getAttribute("data-type") === "text") {
+        ev.preventDefault();
+        submitBtn.click();
+      }
+    });
+
+    load();
+  </script>
+</body>
+
+</html>

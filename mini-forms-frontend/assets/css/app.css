@@ -1,0 +1,4 @@
+/* Optional tiny tweaks */
+html, body { height: 100%; }
+a { text-decoration-thickness: 2px; }
+.code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }

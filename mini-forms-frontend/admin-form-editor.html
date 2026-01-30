@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="pt">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mini Forms — Editor</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="./assets/css/app.css" />
+  <style>
+    .card {
+      border-radius: .375rem;
+    }
+
+    input,
+    textarea,
+    select {
+      border-radius: .375rem;
+    }
+
+    .btn {
+      border-radius: .375rem;
+    }
+  </style>
+</head>
+
+<body class="min-h-screen bg-gray-50 text-gray-900">
+  <header class="bg-white border-b">
+    <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
+      <a href="./admin-dashboard.html" class="font-semibold">← Dashboard</a>
+      <div class="flex items-center gap-2">
+        <button id="publishBtn" class="btn bg-emerald-600 text-white px-4 py-2 text-sm font-medium hover:bg-emerald-700"
+          data-mode="publish">
+          Publicar
+        </button>
+        <button id="logout" class="btn border px-3 py-2 text-sm hover:bg-gray-50">Sair</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 py-2">
+    <div class="flex flex-wrap items-start justify-between gap-4 mb-4">
+      <div class="min-w-0">
+        <h1 id="titleH" class="text-2xl font-bold">Editor</h1>
+        <p id="descP" class="text-gray-600 mt-1"></p>
+        <div id="badges" class="mt-2 flex flex-wrap gap-2"></div>
+      </div>
+
+      <div class="w-full md:w-auto flex  gap-2">
+        <a id="publicLink" class="btn border px-4 py-2 text-sm hover:bg-gray-50 text-center hidden" target="_blank">
+          Abrir form público
+        </a>
+        <button id="copyLink" class="btn border px-4 py-2 text-sm hover:bg-gray-50 hidden">
+          Copiar link
+        </button>
+        <a id="viewResponses" class="btn bg-gray-900 text-white px-4 py-2 text-sm hover:bg-black text-center">
+          Ver respostas
+        </a>
+      </div>
+    </div>
+
+    <!-- toggles visíveis em telas pequenas -->
+    <div class="flex gap-2 mb-4 lg:hidden">
+      <button id="toggleAddQuestion" class="btn border px-3 py-2 text-sm w-full">
+        Adicionar pergunta
+      </button>
+    </div>
+
+    <div id="status" class="mt-4" hidden></div>
+
+    <section class="grid lg:grid-cols-3 gap-6 mt-6">
+      <!-- Coluna esquerda -->
+      <div class="lg:col-span-1 space-y-4">
+        <div id="panelAddQuestion" class="card bg-white border shadow-sm p-5 hidden lg:block">
+          <div class="font-semibold">Adicionar pergunta</div>
+          <div class="mt-3 space-y-3">
+            <div>
+              <label class="text-sm font-medium">Tipo</label>
+              <select id="qType" class="mt-1 w-full border px-3 py-2">
+                <option value="text">Texto (curto)</option>
+                <option value="long_text">Texto (longo)</option>
+                <option value="checkbox">Caixas (checkbox múltipla)</option>
+                <option value="radio">Escolha única (radio button)</option>
+                <option value="upload">Upload</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-sm font-medium">Pergunta (label)</label>
+              <input id="qLabel" class="mt-1 w-full border px-3 py-2" placeholder="Ex: Qual é o teu nome?" />
+            </div>
+            <div class="flex items-center gap-2">
+              <input id="qReq" type="checkbox" class="h-4 w-4" />
+              <label for="qReq" class="text-sm">Obrigatória</label>
+            </div>
+
+            <div id="checkboxOptionsBox" class="border p-3 hidden">
+              <div class="text-sm font-medium">Opções (checkbox/radio)</div>
+              <div class="mt-2 flex gap-2">
+                <input id="optText" class="w-full border px-3 py-2 text-sm" placeholder="Ex: Sim" />
+                <button id="addOptLocal" class="btn border px-3 py-2 text-sm">
+                  Adicionar
+                </button>
+              </div>
+              <div id="optListLocal" class="mt-2 space-y-2"></div>
+              <p class="text-xs text-gray-500 mt-2">
+                As opções serão criadas automaticamente depois de criar a pergunta.
+              </p>
+            </div>
+
+            <button id="addQuestion"
+              class="btn w-full bg-emerald-600 text-white px-4 py-2 text-sm font-medium hover:bg-emerald-700">
+              Adicionar pergunta
+            </button>
+            <div id="qStatus" hidden></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Coluna direita -->
+      <div class="lg:col-span-2">
+        <div class="card bg-white border shadow-sm p-5" style="margin-top: -50px;">
+          <div class="flex items-center justify-between gap-3">
+            <div class="font-semibold">Perguntas</div>
+          </div>
+
+          <div id="questionsWrapper" class="mt-4" style="max-height:60vh; overflow:auto;">
+            <div id="questions" class="space-y-3"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    import { api } from "./assets/js/api.js";
+    import {
+      clearToken,
+      setStatus,
+      qs,
+      escapeHtml,
+      copyToClipboard,
+    } from "./assets/js/config.js";
+    import { pill, renderEmpty } from "./assets/js/ui.js";
+
+    const status = document.getElementById("status");
+    const qStatus = document.getElementById("qStatus");
+    const questionsEl = document.getElementById("questions");
+    const publishBtn = document.getElementById("publishBtn");
+
+    const formId = Number(qs("id") || 0);
+    if (!formId) {
+      setStatus(status, "Falta parâmetro id na URL.", "err");
+    }
+
+    document.getElementById("viewResponses").href =
+      "./admin-responses.html?form_id=" + encodeURIComponent(formId);
+
+    function requireAuth() {
+      const token = localStorage.getItem("auth_token");
+      if (!token) window.location.href = "./admin-login.html";
+    }
+
+    document.getElementById("logout").addEventListener("click", () => {
+      clearToken();
+      window.location.href = "./admin-login.html";
+    });
+
+    document
+      .getElementById("toggleAddQuestion")
+      .addEventListener("click", () => {
+        const a = document.getElementById("panelAddQuestion");
+        a.classList.toggle("hidden");
+        setTimeout(() => a.scrollIntoView({ behavior: "smooth" }), 100);
+      });
+
+    let localOptions = [];
+    const optBox = document.getElementById("checkboxOptionsBox");
+    const optListLocal = document.getElementById("optListLocal");
+
+    function renderLocalOpts() {
+      optListLocal.innerHTML = localOptions
+        .map(
+          (t, idx) => `
+        <div class="flex items-center justify-between gap-2 border px-3 py-2">
+          <div class="text-sm">${escapeHtml(t)}</div>
+          <button data-i="${idx}" class="text-sm text-red-600 hover:underline">
+            remover
+          </button>
+        </div>
+      `,
+        )
+        .join("");
+
+      optListLocal.querySelectorAll("button[data-i]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const i = Number(btn.getAttribute("data-i"));
+          localOptions.splice(i, 1);
+          renderLocalOpts();
+        });
+      });
+    }
+
+    document.getElementById("qType").addEventListener("change", () => {
+      const v = document.getElementById("qType").value;
+      if (v === "checkbox" || v === "radio") {
+        optBox.classList.remove("hidden");
+      } else {
+        optBox.classList.add("hidden");
+      }
+    });
+
+    document.getElementById("addOptLocal").addEventListener("click", () => {
+      const t = document.getElementById("optText").value.trim();
+      if (!t) return;
+      localOptions.push(t);
+      document.getElementById("optText").value = "";
+      renderLocalOpts();
+    });
+
+    function questionCard(q) {
+      const typeBadge = pill(
+        q.type,
+        q.type === "upload"
+          ? "blue"
+          : q.type === "checkbox" || q.type === "radio"
+            ? "amber"
+            : "gray",
+      );
+      const reqBadge = q.is_required
+        ? pill("required", "red")
+        : pill("optional", "gray");
+
+      const optionsHtml =
+        q.type === "checkbox" || q.type === "radio"
+          ? `
+        <div class="mt-2 space-y-1">
+          <div class="text-xs text-gray-500">Opções</div>
+          ${(q.options || [])
+            .map(
+              (o) => `
+            <div class="flex items-center justify-between gap-2 border px-3 py-2">
+              <div class="text-sm">${escapeHtml(o.option_label)}</div>
+              <div class="flex gap-2">
+                <button data-oe="${o.id}" class="text-xs text-gray-700 hover:underline">
+                  editar
+                </button>
+                <button data-od="${o.id}" class="text-xs text-red-600 hover:underline">
+                  apagar
+                </button>
+              </div>
+            </div>
+          `,
+            )
+            .join("")}
+          <div class="mt-2 flex gap-2">
+            <input
+              data-newopt="${q.id}"
+              class="w-full border px-3 py-2 text-sm"
+              placeholder="Nova opção..."
+            />
+            <button data-addopt="${q.id}" class="btn border px-3 py-2 text-sm">
+              Adicionar
+            </button>
+          </div>
+        </div>
+      `
+          : "";
+
+      return `
+        <div class="card border p-4 bg-gray-50">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <div class="font-semibold">${escapeHtml(q.label)}</div>
+                ${typeBadge}
+                ${reqBadge}
+                <span class="text-xs text-gray-500">pos: ${q.position}</span>
+              </div>
+              ${q.placeholder
+          ? `<div class="text-sm text-gray-600 mt-1">
+                       placeholder: ${escapeHtml(q.placeholder || "")}
+                     </div>`
+          : ""
+        }
+            </div>
+            <button
+              data-delq="${q.id}"
+              class="btn border px-3 py-1.5 text-xs text-red-600 hover:bg-red-50"
+            >
+              Apagar pergunta
+            </button>
+          </div>
+
+          <div class="mt-3 grid md:grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs text-gray-600">Label</label>
+              <input
+                data-q="label"
+                data-id="${q.id}"
+                class="mt-1 w-full border px-3 py-2 text-sm"
+                value="${escapeHtml(q.label)}"
+              />
+            </div>
+       
+            <div>
+              <label class="text-xs text-gray-600">Placeholder</label>
+              <input
+                data-q="placeholder"
+                data-id="${q.id}"
+                class="mt-1 w-full border px-3 py-2 text-sm"
+                value="${escapeHtml(q.placeholder || "")}"
+              />
+            </div>
+            <div class="flex items-center gap-2 mt-6">
+              <input
+                data-q="is_required"
+                data-id="${q.id}"
+                type="checkbox"
+                class="h-4 w-4"
+                ${q.is_required ? "checked" : ""}
+              />
+              <label class="text-sm">Obrigatória</label>
+            </div>
+          </div>
+
+          <div class="mt-3 flex justify-end">
+            <button
+              data-saveq="${q.id}"
+              class="btn bg-gray-900 text-white px-4 py-2 text-sm hover:bg-black"
+            >
+              Guardar pergunta
+            </button>
+          </div>
+
+          ${optionsHtml}
+        </div>
+      `;
+    }
+
+    function wireQuestionEvents() {
+      // guardar pergunta
+      document.querySelectorAll("[data-saveq]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const id = Number(btn.getAttribute("data-saveq"));
+          const label = document
+            .querySelector(`[data-q="label"][data-id="${id}"]`)
+            ?.value?.trim();
+          const placeholder =
+            document.querySelector(
+              `[data-q="placeholder"][data-id="${id}"]`,
+            )?.value ?? "";
+          const position = Number(
+            document.querySelector(
+              `[data-q="position"][data-id="${id}"]`,
+            )?.value ?? 0,
+          );
+          const is_required = !!document.querySelector(
+            `[data-q="is_required"][data-id="${id}"]`,
+          )?.checked;
+
+          try {
+            setStatus(status, "A guardar pergunta...", "info");
+            await api.updateQuestion(id, {
+              label,
+              placeholder,
+              position,
+              is_required,
+            });
+            setStatus(status, "Pergunta atualizada.", "ok");
+            await load();
+          } catch (e) {
+            setStatus(status, e?.payload?.error?.message || e.message, "err");
+          }
+        });
+      });
+
+      // NOVO: apagar (arquivar) pergunta
+      document.querySelectorAll("[data-delq]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const id = Number(btn.getAttribute("data-delq"));
+          if (!confirm("Tens a certeza que queres apagar esta pergunta?")) return;
+          try {
+            setStatus(status, "A apagar pergunta...", "info");
+            await api.archiveQuestion(id);
+            setStatus(status, "Pergunta apagada.", "ok");
+            await load();
+          } catch (e) {
+            setStatus(status, e?.payload?.error?.message || e.message, "err");
+          }
+        });
+      });
+
+      // opções
+      document.querySelectorAll("[data-addopt]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const qid = Number(btn.getAttribute("data-addopt"));
+          const input = document.querySelector(`[data-newopt="${qid}"]`);
+          const option_label = input?.value?.trim();
+          if (!option_label) return;
+
+          try {
+            setStatus(status, "A adicionar opção...", "info");
+            await api.createOption(qid, { option_label });
+            input.value = "";
+            setStatus(status, "Opção adicionada.", "ok");
+            await load();
+          } catch (e) {
+            setStatus(status, e?.payload?.error?.message || e.message, "err");
+          }
+        });
+      });
+
+      document.querySelectorAll("[data-od]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const oid = Number(btn.getAttribute("data-od"));
+          if (!confirm("Apagar esta opção?")) return;
+          try {
+            setStatus(status, "A apagar opção...", "info");
+            await api.deleteOption(oid);
+            setStatus(status, "Opção removida.", "ok");
+            await load();
+          } catch (e) {
+            setStatus(status, e?.payload?.error?.message || e.message, "err");
+          }
+        });
+      });
+
+      document.querySelectorAll("[data-oe]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const oid = Number(btn.getAttribute("data-oe"));
+          const newLabel = prompt("Novo texto da opção:");
+          if (!newLabel) return;
+          try {
+            setStatus(status, "A atualizar opção...", "info");
+            await api.updateOption(oid, { option_label: newLabel });
+            setStatus(status, "Opção atualizada.", "ok");
+            await load();
+          } catch (e) {
+            setStatus(status, e?.payload?.error?.message || e.message, "err");
+          }
+        });
+      });
+    }
+
+    async function load() {
+      requireAuth();
+      try {
+        setStatus(status, "A carregar...", "info");
+        const res = await api.getForm(formId);
+        const f = res?.data || res;
+        if (!f) throw new Error("Form não encontrado.");
+
+        document.getElementById("titleH").textContent = f.title || "Editor";
+        document.getElementById("descP").textContent = f.description || "";
+
+        const theme = f.theme_settings || f.theme || {};
+        // se ainda tiveres inputs de tema no DOM, podes preencher aqui
+
+        const badges = [];
+        const isPub = Number(f.is_published) === 1;
+        badges.push(isPub ? pill("Publicado", "green") : pill("Rascunho", "amber"));
+        badges.push(pill("slug: " + (f.slug || ""), "gray"));
+        document.getElementById("badges").innerHTML = badges.join(" ");
+
+        // botão publicar / desativar publicação
+        if (isPub) {
+          publishBtn.textContent = "Desativar publicação";
+          publishBtn.dataset.mode = "unpublish";
+          publishBtn.classList.remove("bg-emerald-600", "hover:bg-emerald-700");
+          publishBtn.classList.add("bg-amber-500", "hover:bg-amber-600");
+        } else {
+          publishBtn.textContent = "Publicar";
+          publishBtn.dataset.mode = "publish";
+          publishBtn.classList.remove("bg-amber-500", "hover:bg-amber-600");
+          publishBtn.classList.add("bg-emerald-600", "hover:bg-emerald-700");
+        }
+
+        const link = "./public-form.html?slug=" + encodeURIComponent(f.slug || "");
+        const publicLink = document.getElementById("publicLink");
+        const copyLink = document.getElementById("copyLink");
+
+        if (isPub && f.slug) {
+          publicLink.classList.remove("hidden");
+          copyLink.classList.remove("hidden");
+          publicLink.href = link;
+        } else {
+          publicLink.classList.add("hidden");
+          copyLink.classList.add("hidden");
+        }
+
+        copyLink.onclick = async () => {
+          const base = window.location.href.replace(/\/[^/]*$/, "/");
+          await copyToClipboard(base + link.replace("./", ""));
+          setStatus(status, "Link copiado!", "ok");
+        };
+
+        const list = f.questions || [];
+        if (!list.length) {
+          renderEmpty(
+            questionsEl,
+            "Sem perguntas",
+            "Cria a primeira pergunta no painel à esquerda.",
+          );
+        } else {
+          questionsEl.innerHTML = list.map(questionCard).join("");
+          wireQuestionEvents();
+        }
+
+        setStatus(status, "", "info");
+      } catch (e) {
+        setStatus(status, e?.payload?.error?.message || e.message, "err");
+        if (e.status === 401) window.location.href = "./admin-login.html";
+      }
+    }
+
+    document.getElementById("addQuestion").addEventListener("click", async () => {
+      try {
+        setStatus(qStatus, "A adicionar pergunta...", "info");
+        const type = document.getElementById("qType").value;
+        const label = document.getElementById("qLabel").value.trim();
+        const is_required = document.getElementById("qReq").checked;
+
+        if (!label) {
+          return setStatus(
+            qStatus,
+            "A pergunta (label) é obrigatória.",
+            "warn",
+          );
+        }
+
+        const payload = { type, label, is_required, position: Date.now() };
+        if (type === "checkbox" || type === "radio") {
+          payload.options = localOptions.map((t) => ({ option_label: t }));
+        }
+
+        await api.createQuestion(formId, payload);
+        document.getElementById("qLabel").value = "";
+        document.getElementById("qReq").checked = false;
+        localOptions = [];
+        renderLocalOpts();
+        setStatus(qStatus, "Pergunta criada.", "ok");
+        await load();
+      } catch (e) {
+        setStatus(qStatus, e?.payload?.error?.message || e.message, "err");
+      }
+    });
+
+    publishBtn.addEventListener("click", async () => {
+      const mode = publishBtn.dataset.mode || "publish";
+      try {
+        setStatus(
+          status,
+          mode === "publish"
+            ? "A publicar formulário..."
+            : "A desativar publicação...",
+          "info",
+        );
+
+        if (mode === "publish") {
+          await api.publishForm(formId);
+        } else {
+          await api.unpublishForm(formId);
+        }
+
+        setStatus(status, "Estado de publicação atualizado.", "ok");
+        await load();
+      } catch (e) {
+        setStatus(status, e?.payload?.error?.message || e.message, "err");
+      }
+    });
+
+    load();
+       (function () {
+          let tempoInativo = 0;
+         const LIMITE_SEGUNDOS = 900;
+          const URL_DESTINO = "./admin-login.html";
+
+          const monitorarInatividade = () => {
+            tempoInativo++;
+            console.log(`Inativo há ${tempoInativo}s`);
+
+            if (tempoInativo >= LIMITE_SEGUNDOS) {
+              window.location.href = URL_DESTINO;
+            }
+          };
+
+          const reiniciarContador = () => {
+            if (tempoInativo > 0) {
+              tempoInativo = 0;
+              console.log("Atividade detetada. Contador reiniciado.");
+            }
+          };
+
+          // Inicia o intervalo de 1 segundo
+          setInterval(monitorarInatividade, 1000);
+
+          // Regista os eventos de interação conforme documentado na [MDN Web Docs](https://developer.mozilla.org)
+          const eventos = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'];
+          eventos.forEach(evento => {
+            document.addEventListener(evento, reiniciarContador, { passive: true });
+          });
+        })();
+
+  </script>
+</body>
+
+</html>

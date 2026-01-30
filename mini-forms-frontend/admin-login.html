@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="pt">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mini Forms — Login Admin</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="./assets/css/app.css" />
+
+  <style>
+    /* Background com imagem de fundo + camada ofuscada com “lanterna” circular */
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: #111827;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .bg-image {
+      position: fixed;
+      inset: 0;
+      background-image: url("./assets/img/FUNDO.jpg");
+      /* TROCAR pelo caminho real */
+      background-size: cover;
+      background-position: center;
+      z-index: -2;
+    }
+
+    .bg-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      z-index: -1;
+
+      /* “Lanterna” circular controlada por variáveis CSS */
+      --x: 50%;
+      --y: 50%;
+      mask-image: radial-gradient(circle 140px at var(--x) var(--y), transparent 0, transparent 130px, black 150px);
+      -webkit-mask-image: radial-gradient(circle 140px at var(--x) var(--y), transparent 0, transparent 130px, black 150px);
+    }
+  </style>
+</head>
+
+<body class="text-gray-900">
+
+  <!-- Fundo com imagem e overlay ofuscado -->
+  <div class="bg-image"></div>
+  <div id="blurLayer" class="bg-overlay"></div>
+
+  <!-- Container central -->
+  <div class="min-h-screen flex items-center justify-center px-4">
+    <div class="w-full max-w-md">
+      <div class="rounded-2xl bg-white/95 border border-white/60 shadow-xl shadow-emerald-900/20 p-8 backdrop-blur-sm">
+        <div class="mb-6 text-center">
+          <div class="inline-flex items-center justify-center w-12 h-12 rounded-2xl  mb-3">
+            <span class="text-emerald-700 text-2xl font-bold"><img src="assets/img/infoadjelson.png" alt=""></span>
+          </div>
+          <h1 class="text-2xl font-bold text-slate-900">Login</h1>
+          <p class="mt-1 text-sm text-slate-500">Acesse o painel de administração</p>
+        </div>
+
+        <form id="loginForm" class="space-y-4">
+          <div>
+            <label for="email" class="text-sm font-medium text-slate-700">Email</label>
+            <input id="email" type="email" autocomplete="email" class="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm outline-none transition
+                     focus:border-emerald-500 focus:ring-2 focus:ring-emerald-400/60 focus:bg-white"
+              placeholder="admin@exemplo.com" required />
+          </div>
+
+          <div>
+            <label for="password" class="text-sm font-medium text-slate-700">Password</label>
+            <div class="mt-1 relative">
+              <input id="password" type="password" autocomplete="current-password" class="w-full rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm outline-none pr-10 transition
+                       focus:border-emerald-500 focus:ring-2 focus:ring-emerald-400/60 focus:bg-white"
+                placeholder="••••••••" required />
+              <button type="button" id="togglePassword"
+                class="absolute inset-y-0 right-2 flex items-center text-xs text-slate-500 hover:text-emerald-600 font-medium"
+                tabindex="-1">
+                Ver
+              </button>
+            </div>
+          </div>
+
+          <button id="btn" type="submit" class="w-full rounded-xl bg-emerald-600 text-white px-4 py-2.5 text-sm font-semibold
+                   shadow-sm shadow-emerald-900/30 hover:bg-emerald-700 focus:outline-none focus:ring-2
+                   focus:ring-offset-2 focus:ring-emerald-500 transition">
+            Entrar
+          </button>
+
+          <div id="status" hidden class="mt-2 text-sm rounded-lg px-3 py-2"></div>
+        </form>
+
+       
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { api } from "./assets/js/api.js";
+    import { getApiBase, setApiBase, setToken, setStatus } from "./assets/js/config.js";
+
+    const statusEl = document.getElementById("status");
+    const loginForm = document.getElementById("loginForm");
+    const emailInput = document.getElementById("email");
+    const passInput = document.getElementById("password");
+    const btn = document.getElementById("btn");
+    const blurLayer = document.getElementById("blurLayer");
+    const togglePass = document.getElementById("togglePassword");
+
+    // -----------------------------
+    // Fundo: efeito “lanterna”
+    // -----------------------------
+    document.addEventListener("mousemove", (e) => {
+      if (!blurLayer) return;
+      const x = (e.clientX / window.innerWidth) * 100 + "%";
+      const y = (e.clientY / window.innerHeight) * 100 + "%";
+      blurLayer.style.setProperty("--x", x);
+      blurLayer.style.setProperty("--y", y);
+    });
+
+    // -----------------------------
+    // API base (caso exista a UI)
+    // -----------------------------
+    const apiBaseInput = document.getElementById("apiBase");
+    const saveApiBtn = document.getElementById("saveApi");
+
+    if (apiBaseInput) {
+      apiBaseInput.value = getApiBase();
+    }
+
+    if (saveApiBtn && apiBaseInput) {
+      saveApiBtn.addEventListener("click", () => {
+        setApiBase(apiBaseInput.value.trim());
+        setStatus(statusEl, "API base guardada.", "ok");
+      });
+    }
+
+    // -----------------------------
+    // Helpers de validação
+    // -----------------------------
+    function isValidEmail(email) {
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    }
+
+    function clearFieldErrors() {
+      [emailInput, passInput].forEach((el) => {
+        el.classList.remove("border-red-500", "focus:border-red-500", "focus:ring-red-400/60");
+      });
+    }
+
+    function showFieldError(input, message) {
+      clearFieldErrors();
+      input.classList.add("border-red-500", "focus:border-red-500", "focus:ring-red-400/60");
+      setStatus(statusEl, message, "err");
+    }
+
+    // -----------------------------
+    // Mostrar / ocultar senha
+    // -----------------------------
+    if (togglePass) {
+      togglePass.addEventListener("click", () => {
+        const isPassword = passInput.type === "password";
+        passInput.type = isPassword ? "text" : "password";
+        togglePass.textContent = isPassword ? "Ocultar" : "Ver";
+      });
+    }
+
+    // -----------------------------
+    // Função de login
+    // -----------------------------
+    async function doLogin() {
+      clearFieldErrors();
+
+      const email = emailInput.value.trim();
+      const password = passInput.value;
+
+      // Validação básica
+      if (!email) {
+        showFieldError(emailInput, "Informe o email.");
+        emailInput.focus();
+        return;
+      }
+
+      if (!isValidEmail(email)) {
+        showFieldError(emailInput, "Email inválido.");
+        emailInput.focus();
+        return;
+      }
+
+      if (!password) {
+        showFieldError(passInput, "Informe a password.");
+        passInput.focus();
+        return;
+      }
+
+      try {
+        btn.disabled = true;
+        btn.classList.add("opacity-70", "cursor-not-allowed");
+        setStatus(statusEl, "A autenticar...", "info");
+
+        const res = await api.login(email, password);
+        const token = res?.data?.token;
+
+        if (!token) {
+          throw new Error("Resposta inválida (sem token).");
+        }
+
+        setToken(token);
+        setStatus(statusEl, "Login OK! A redirecionar...", "ok");
+
+        setTimeout(() => {
+          window.location.href = "./admin-dashboard.html";
+        }, 400);
+      } catch (e) {
+        const msg = e?.payload?.error?.message || e.message || "Erro ao autenticar.";
+        setStatus(statusEl, msg, "err");
+      } finally {
+        btn.disabled = false;
+        btn.classList.remove("opacity-70", "cursor-not-allowed");
+      }
+    }
+
+    // -----------------------------
+    // Submit do formulário (Enter)
+    // -----------------------------
+    if (loginForm) {
+      loginForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        doLogin();
+      });
+    }
+  </script>
+</body>
+
+</html>

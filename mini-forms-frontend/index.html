@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="pt">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Monitor de Inatividade - Redirecionamento</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background-color: #f8f9fa;
+      margin: 0;
+    }
+
+    .container {
+      text-align: center;
+      background: #fff;
+      padding: 30px;
+      border-radius: 15px;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+      border-top: 5px solid #dc3545;
+    }
+
+    #timer {
+      font-size: 4rem;
+      font-weight: 800;
+      color: #343a40;
+      margin: 10px 0;
+    }
+
+    .aviso {
+      color: #6c757d;
+      font-size: 0.9rem;
+    }
+
+    .progresso {
+      width: 100%;
+      background: #eee;
+      height: 10px;
+      border-radius: 5px;
+      margin-top: 15px;
+      overflow: hidden;
+    }
+
+    #barra {
+      width: 0%;
+      height: 100%;
+      background: #dc3545;
+      transition: width 0.3s;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="container">
+    <h2>Sessão Expira em:</h2>
+    <div id="timer">60s</div>
+    <div class="progresso">
+      <div id="barra"></div>
+    </div>
+    <p class="aviso">A página será redirecionada após 60s de inatividade.</p>
+  </div>
+
+  <script>
+    let tempoInativo = 0;
+    const LIMITE = 60; // Segundos para redirecionar
+    const URL_DESTINO = "https://www.google.com"; // Altera para a tua página de destino
+
+    const elementoTimer = document.getElementById('timer');
+    const elementoBarra = document.getElementById('barra');
+
+    function gerirTempo() {
+      tempoInativo++;
+
+      // Atualiza interface
+      let tempoRestante = LIMITE - tempoInativo;
+      elementoTimer.textContent = tempoRestante + "s";
+
+      // Atualiza barra de progresso
+      let percentagem = (tempoInativo / LIMITE) * 100;
+      elementoBarra.style.width = percentagem + "%";
+
+      // Verifica se atingiu o limite
+      if (tempoInativo >= LIMITE) {
+        window.location.href = URL_DESTINO;
+      }
+    }
+
+    function reset() {
+      tempoInativo = 0;
+      elementoTimer.textContent = LIMITE + "s";
+      elementoBarra.style.width = "0%";
+    }
+
+    // Executa a contagem a cada segundo
+    setInterval(gerirTempo, 1000);
+
+    // Eventos de atividade (rato, teclado, touch, scroll)
+    const eventos = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'];
+    eventos.forEach(ev => document.addEventListener(ev, reset));
+  </script>
+
+</body>
+
+</html>

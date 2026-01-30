@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="pt">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Mini Forms — Reciclagem</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="./assets/css/app.css" />
+</head>
+
+<body class="min-h-screen bg-gray-50 text-gray-900">
+    <!-- Top bar -->
+    <header class="bg-white/80 backdrop-blur border-b sticky top-0 z-20">
+        <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+            <div class="flex items-center gap-2">
+                <div
+                    class="h-8 w-8 rounded-md bg-emerald-600 text-white flex items-center justify-center text-sm font-bold">
+                    MF
+                </div>
+                <div>
+                    <a href="./index.html" class="font-semibold tracking-tight">Mini Forms</a>
+                    <div class="text-xs text-gray-500">Painel de administração</div>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <a href="./admin-dashboard.html"
+                    class="hidden sm:inline text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-md px-3 py-1">
+                    Dashboard
+                </a>
+
+                <a href="./admin-recycle.html"
+                    class="inline-flex items-center gap-2 rounded-md border border-red-300 bg-red-50 px-3 py-1.5 text-xs sm:text-sm text-red-800 hover:bg-red-100">
+                    <span class="h-2 w-2 rounded-full bg-red-500"></span>
+                    Reciclagem
+                </a>
+
+                <button data-action="logout" class="rounded-md border px-3 py-1.5 text-xs sm:text-sm hover:bg-gray-50">
+                    Sair
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-4 py-8 space-y-6">
+        <!-- Header -->
+        <section class="flex flex-wrap items-center justify-between gap-4">
+            <div>
+                <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">Reciclagem</h1>
+                <p class="text-gray-600 mt-1 text-sm sm:text-base">
+                    Aqui encontras os formulários arquivados. Podes consultar perguntas e respostas mesmo na reciclagem.
+                </p>
+            </div>
+
+            <a href="./admin-dashboard.html"
+                class="inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium hover:bg-gray-50">
+                ← Voltar ao Dashboard
+            </a>
+        </section>
+
+        <div id="status" class="mt-2 text-sm" hidden></div>
+
+        <section class="space-y-3">
+            <div class="flex items-center justify-between gap-2">
+                <div>
+                    <h2 class="text-sm font-semibold text-gray-800 uppercase tracking-wide">
+                        Formulários na reciclagem
+                    </h2>
+                    <p class="text-xs text-gray-500">
+                        Apenas formulários marcados como arquivados (<code>is_archived = 1</code>).
+                    </p>
+                </div>
+                <span id="formsCount"
+                    class="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-700">
+                    0 formulários
+                </span>
+            </div>
+
+            <div id="forms" class="grid gap-4"></div>
+        </section>
+    </main>
+
+    <script type="module">
+        import { api } from "./assets/js/api.js";
+        import { clearToken, setStatus, escapeHtml } from "./assets/js/config.js";
+        import { renderEmpty, pill } from "./assets/js/ui.js";
+
+        const $ = (sel, ctx = document) => ctx.querySelector(sel);
+
+        const statusEl = $("#status");
+        const formsEl = $("#forms");
+        const formsCount = $("#formsCount");
+
+        function requireAuth() {
+            if (!localStorage.getItem("auth_token")) {
+                location.href = "./admin-login.html";
+            }
+        }
+
+        document.addEventListener("click", (ev) => {
+            const t = ev.target;
+
+            if (t.closest('[data-action="logout"]')) {
+                ev.preventDefault();
+                clearToken();
+                location.href = "./admin-login.html";
+                return;
+            }
+        });
+
+        function formCard(f) {
+            const isPub = !!Number(f.is_published);
+            const badgeState = pill(isPub ? "Publicado" : "Rascunho", isPub ? "green" : "amber");
+            const badgeArchived = pill("Arquivado", "red");
+
+            // theme_settings pode vir como JSON string ou objeto
+            let theme = {};
+            try {
+                if (f.theme_settings) {
+                    theme =
+                        typeof f.theme_settings === "string"
+                            ? JSON.parse(f.theme_settings)
+                            : f.theme_settings;
+                }
+            } catch {
+                theme = {};
+            }
+
+            const pColor = escapeHtml(theme.primaryColor || theme.primary_color || "#10b981");
+            const bgColor = escapeHtml(theme.background || theme.bg || theme.backgroundColor || "#ffffff");
+
+            const createdAt = f.created_at || "";
+
+            return `
+        <div class="rounded-md bg-white border shadow-sm p-5 hover:shadow-md transition">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <div class="font-semibold truncate">
+                  ${escapeHtml(f.title || "Sem título")}
+                </div>
+                ${badgeState}
+                ${badgeArchived}
+              </div>
+
+              <div class="text-sm text-gray-600 mt-1 line-clamp-2">
+                ${escapeHtml(f.description || "")}
+              </div>
+
+              <div class="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-500">
+                <div class="inline-flex items-center gap-2">
+                  <span class="h-4 w-4 rounded" style="background:${pColor}; border:1px solid rgba(0,0,0,0.06)"></span>
+                  <span>Cor primária</span>
+                </div>
+                <div class="inline-flex items-center gap-2">
+                  <span class="h-4 w-4 rounded" style="background:${bgColor}; border:1px solid rgba(0,0,0,0.06)"></span>
+                  <span>Fundo</span>
+                </div>
+                ${createdAt
+                    ? `<span class="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[11px]">Criado em: ${escapeHtml(
+                        createdAt,
+                    )}</span>`
+                    : ""
+                }
+              </div>
+            </div>
+
+            <div class="flex flex-col gap-2 shrink-0">
+              <!-- Aqui no futuro vamos pôr "Restaurar" / "Eliminar definitivo" quando tiver endpoints -->
+              <a
+                class="rounded-md bg-gray-900 text-white px-3 py-1.5 text-xs sm:text-sm hover:bg-black text-center"
+                href="./admin-responses.html?form_id=${encodeURIComponent(f.id)}"
+              >
+                Respostas
+              </a>
+              <a
+                class="rounded-md border px-3 py-1.5 text-xs sm:text-sm hover:bg-gray-50 text-center"
+                href="./admin-form-editor.html?id=${encodeURIComponent(f.id)}"
+              >
+                Perguntas
+              </a>
+            </div>
+          </div>
+        </div>
+      `;
+        }
+
+        async function loadArchived() {
+            requireAuth();
+            try {
+                setStatus(statusEl, "A carregar formulários arquivados...", "info");
+                const res = await api.listArchivedForms();
+                // backend devolve { data: [...] }
+                const list = Array.isArray(res) ? res : (res?.data || []);
+
+                if (!list.length) {
+                    formsCount.textContent = "0 formulários";
+                    renderEmpty(
+                        formsEl,
+                        "Reciclagem vazia",
+                        "Quando enviares um formulário para a reciclagem, ele aparece aqui.",
+                    );
+                    setStatus(statusEl, "", "info");
+                    return;
+                }
+
+                formsCount.textContent =
+                    list.length === 1 ? "1 formulário" : `${list.length} formulários`;
+
+                formsEl.innerHTML = list.map(formCard).join("");
+
+                setStatus(statusEl, "", "info");
+            } catch (e) {
+                const msg =
+                    e?.payload?.error?.message || e.message || "Erro ao carregar formulários arquivados";
+                setStatus(statusEl, msg, "err");
+                if (e.status === 401) location.href = "./admin-login.html";
+            }
+        }
+
+        loadArchived();
+           (function () {
+                let tempoInativo = 0;
+               const LIMITE_SEGUNDOS = 900;
+                const URL_DESTINO = "./admin-login.html";
+
+                const monitorarInatividade = () => {
+                    tempoInativo++;
+                    console.log(`Inativo há ${tempoInativo}s`);
+
+                    if (tempoInativo >= LIMITE_SEGUNDOS) {
+                        window.location.href = URL_DESTINO;
+                    }
+                };
+
+                const reiniciarContador = () => {
+                    if (tempoInativo > 0) {
+                        tempoInativo = 0;
+                        console.log("Atividade detetada. Contador reiniciado.");
+                    }
+                };
+
+                // Inicia o intervalo de 1 segundo
+                setInterval(monitorarInatividade, 1000);
+
+                // Regista os eventos de interação conforme documentado na [MDN Web Docs](https://developer.mozilla.org)
+                const eventos = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'];
+                eventos.forEach(evento => {
+                    document.addEventListener(evento, reiniciarContador, { passive: true });
+                });
+            })();
+
+    </script>
+</body>
+
+</html>
