@@ -6,6 +6,12 @@ Plataforma web simples, moderna e segura para **criação de formulários e marc
 O sistema permite que utilizadores preencham formulários públicos e que o administrador acompanhe, controle e visualize o histórico completo das marcações.
 
 ---
+### PAGINA INICIAL
+![Homepage](./mini-forms-frontend/assets/img/formularioPublic.png)
+
+### DASHBOARD
+![Homepage](./mini-forms-frontend/assets/img/dashboard.png)
+
 
 ## 🚀 Funcionalidades
 
@@ -51,19 +57,9 @@ O sistema permite que utilizadores preencham formulários públicos e que o admi
 
 ```
 
-marcacao/
-│
-├── index.html
-├── admin-dashboard.html
-├── admin-recycle.html
-├── admin-public.html
-├── admin-login.html
-├── admin-responses.html
-|
-├── assets/
-│   ├── css/
-│   ├── js/
-│   └── img/
+FormularioGoog/
+├── mini-forms-frontend/
+├── mini-forms-dashboard/
 └── README.md
 
 ```
@@ -75,7 +71,7 @@ marcacao/
 1. Copiar o projeto para:
 ```
 
-C:\xampp\htdocs\marcacao
+C:\xampp\htdocs\FormularioGoog
 
 ```
 
@@ -85,7 +81,7 @@ C:\xampp\htdocs\marcacao
 Exemplo:
 ```
 
-marcacao_db
+FormularioGoog
 
 ```
 
@@ -127,6 +123,9 @@ config/database.php
 
 ---
 
+
+### DELETE DE CONFIRMAÇÃO
+![Homepage](./mini-forms-frontend/assets/img/delete.png)
 ## 📱 Design
 
 - Interface moderna
@@ -134,6 +133,8 @@ config/database.php
 - Cores personalizáveis
 - Compatível com todos os navegadores modernos
 
+### FORMULARIO DE CRIAÇAO DE FORMULARIO
+![Homepage](./mini-forms-frontend/assets/img/edicaoForm.png)
 ---
 
 ## 🧪 Requisitos
